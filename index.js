@@ -83,9 +83,10 @@ export async function init() {
         await updateCharacterLetta();
     });
 
-    eventSource.on(event_types.CHARACTER_RENAMED, async function (args) {
-        await deleteCharacter(args);
-    });
+    // Renaming not supported
+    // eventSource.on(event_types.CHARACTER_RENAMED, async function (args) {
+    //     await deleteCharacter(args);
+    // });
 
     eventSource.on(event_types.CHARACTER_EDITED, async function () {
         await updateCharacterLetta();
@@ -99,13 +100,9 @@ export async function init() {
         await deleteChat(args);
     });
 
-    eventSource.on(event_types.CHAT_LOADED, async function () {
-        await loadChatLetta();
+    eventSource.on(event_types.CHAT_LOADED, async function (args) {
+        await loadChatLetta(args.detail);
     });
-
-    // eventSource.on(event_types.CHAT_CREATED, async function () {
-    //     await loadChatLetta();
-    // });
 
     eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, async function () {
         await updatePromptLetta();
@@ -127,9 +124,9 @@ export async function init() {
         await editLetta(sync_n_messages);
     });
 
-    eventSource.on(event_types.GENERATION_STOPPED, async function () {
-        await editLetta(sync_n_messages);
-    });
+    // eventSource.on(event_types.GENERATION_STOPPED, async function () {
+    //     await editLetta(sync_n_messages);
+    // });
 }
 
 var stash_characterId = "";
@@ -167,9 +164,9 @@ const LETTA_AGENT_TYPES = Object.freeze({
     VOICE_SLEEPTIME: "voice_sleeptime_agent",
 });
 
-async function updateCharacterLetta() {
+async function updateCharacterLetta(character) {
     const {characterId, characters, chatMetadata, mainApi, chatCompletionSettings, saveMetadata} = SillyTavern.getContext();
-    const character = await getCharacter(characterId, characters);
+    if(!character) character = await getCharacter(characterId, characters);
     if(!character) return false;
 
     const baseHeaders = getRequestHeaders();
@@ -258,10 +255,10 @@ async function getChatLetta(agent_id, title) {
  * Prepares the server with extra information before messaging.
  * letta_agent_id and letta_conversation_id are set in ST chat metadata
 **/
-async function loadChatLetta() {
+async function loadChatLetta(options) {
     const {chatMetadata, chatId, saveMetadata} = SillyTavern.getContext();
 
-    if(!chatMetadata.letta_agent_id) updateCharacterLetta();
+    if(!chatMetadata.letta_agent_id) await updateCharacterLetta(options?.character || null);
     
     const baseHeaders = getRequestHeaders();
     const response = await fetch('/api/plugins/letta-plugin/load_chat', {
