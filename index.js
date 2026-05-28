@@ -31,6 +31,7 @@ import { MEDIA_REQUEST_TYPE, VIDEO_EXTENSIONS } from '../../../constants.js';
 import { ContextMenu } from '../../quick-reply/src/ui/ctx/ContextMenu.js';
 import { setOpenAIMessages, oai_settings, loadOpenAISettings } from '../../../openai.js';
 import { user_avatar, autoSelectPersona } from '../../../personas.js';
+import { replaceMacrosInList } from '/scripts/textgen-settings.js';
 
 const { extensionSettings, saveSettingsDebounced, renderExtensionTemplateAsync } = SillyTavern.getContext();
 export { MODULE_NAME };
@@ -105,6 +106,7 @@ export async function init() {
     });
 
     eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, async function () {
+        // args.chat
         await updatePromptLetta();
     });
 
@@ -153,8 +155,6 @@ async function getCharacter(characterId, characters){
  * Update or create the current character in Letta
 **/
 const LETTA_AGENT_TYPES = Object.freeze({
-    MEMGPT: "memgpt_agent",
-    MEMGPT_V2: "memgpt_v2_agent",
     LETTA_V1: "letta_v1_agent",
     REACT: "react_agent",
     WORKFLOW: "workflow_agent",
@@ -178,18 +178,21 @@ async function updateCharacterLetta(character) {
         body: JSON.stringify({
             agent_id: chatMetadata.letta_agent_id,
             characterId: character.avatar,
-            character_json: character.json_data,
+            character_json: substituteParams(character.json_data),
             model_settings: {
                 ...oai_settings, // This has a lot of data that should be stripped out
                 provider_type: mainApi,
                 max_output_tokens: oai_settings.openai_max_tokens,
-                embedding: "openai/text-embedding-3-small" 
+                embedding: "openai/text-embedding-3-small"
             },
             agent_settings: {
                 agent_type: LETTA_AGENT_TYPES.LETTA_V1,
                 model: 'openai-proxy/' + chatCompletionSettings.custom_model,
                 context_window_limit: oai_settings.openai_max_context,
                 // system: '', // This gets overwritten anyway.
+                // secrets: // map[string] add env vars that tools depend on
+                tools: ['memory', 'memory_rethink', 'conversation_search', 'archival_memory_insert', 'archival_memory_search']
+
             },
         })
     });
@@ -288,20 +291,19 @@ async function loadChatLetta(options) {
 }
 
 async function updatePromptLetta() {
-    const {chatMetadata} = SillyTavern.getContext();
+    const {chatMetadata, chatId} = SillyTavern.getContext();
     const agent_id = chatMetadata.letta_agent_id;
     if(!agent_id) return false;
 
-    const prompts_processed = oai_settings.prompts.map((prompt) => {
-        if (!prompt) return prompt;
+    await loadItemizedPrompts(chatId);
+    // console.log('---- Prompt ----\n', itemizedPrompts[0]);
+    const system_prompt = itemizedPrompts[0].storyString;
+    // const {
+    //     rawPrompt,
+    //     ...restPrompt
+    // } = itemizedPrompts;
 
-        return {
-            ...prompt,
-            content: prompt.content ? substituteParams(prompt.content) : prompt.content
-        };
-    });
-
-    if(!prompts_processed) return false;
+    // const system_prompt = prompts.reduce((sys_prompt, prompt) => sys_prompt += prompt.content + '\n');
 
     const baseHeaders = getRequestHeaders();
     const response = await fetch('/api/plugins/letta-plugin/update_prompt', {
@@ -311,8 +313,9 @@ async function updatePromptLetta() {
         }),
         body: JSON.stringify({
             agent_id: agent_id,
-            prompts: prompts_processed,
-            prompt_order: oai_settings.prompt_order
+            // prompts: restPrompt,
+            // prompt_order: oai_settings.prompt_order
+            system_prompt: system_prompt,
         })
     });
     if(!response.ok){
