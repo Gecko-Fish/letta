@@ -12,7 +12,7 @@ import {
     loadItemizedPrompts,
     getUserAvatar,
     getUserAvatars,
-    // settings,
+    settings,
     replaceItemizedPromptText,
 } from '../../../../script.js';
 import { groups, selected_group } from '../../../group-chats.js';
@@ -46,7 +46,7 @@ if (!extensionSettings[MODULE_NAME]) {
     extensionSettings[MODULE_NAME] = structuredClone(defaultSettings);
 }
 
-const settings = extensionSettings[MODULE_NAME];
+const letta_glue_settings = extensionSettings[MODULE_NAME];
 
 // const settings = defaultSettings;
 
@@ -63,7 +63,7 @@ export async function init() {
     {
         title: 'Letta',
         version: '1.0',
-        sync_n_messages: settings.sync_n_messages,
+        sync_n_messages: letta_glue_settings.sync_n_messages,
     }
     );
 
@@ -71,11 +71,11 @@ export async function init() {
     $('#extensions_settings2').append(settingsHtml);
     
     $('#letta_sync_n_messages').on('input', function () {
-        settings.sync_n_messages = Number($(this).val());
+        letta_glue_settings.sync_n_messages = Number($(this).val());
         saveSettingsDebounced();
     });
 
-    const sync_n_messages = settings.sync_n_messages;
+    const sync_n_messages = letta_glue_settings.sync_n_messages;
     console.log('sync_n_messages:', sync_n_messages);
 
     console.log('-------- Letta Glue Init --------');
@@ -183,7 +183,6 @@ async function updateCharacterLetta(character) {
                 ...oai_settings, // This has a lot of data that should be stripped out
                 provider_type: mainApi,
                 max_output_tokens: oai_settings.openai_max_tokens,
-                embedding: "openai/text-embedding-3-small"
             },
             agent_settings: {
                 agent_type: LETTA_AGENT_TYPES.LETTA_V1,
@@ -191,8 +190,18 @@ async function updateCharacterLetta(character) {
                 context_window_limit: oai_settings.openai_max_context,
                 // system: '', // This gets overwritten anyway.
                 // secrets: // map[string] add env vars that tools depend on
-                tools: ['memory', 'memory_rethink', 'conversation_search', 'archival_memory_insert', 'archival_memory_search']
-
+                // tools: ['memory', 'memory_rethink', 'conversation_search', 'archival_memory_insert', 'archival_memory_search']
+                enable_sleeptime: true,
+                managed_group: {
+                    sleeptime_agent_frequency: 10 // TODO this currently doesn't work seemingly because of a letta api issue.
+                },
+                embedding: "openai/text-embedding-3-small",
+                memory_blocks: [
+                    {label: 'character_memory', value: '', description: 'Specific details this character has accumulated regarding present events.'},
+                    {label: 'character_features', value: '', description: 'What we have learned about the characters involed.'},
+                    {label: 'relationships', value: '', description: 'How the characters currently related to eachother.'},
+                    {label: 'world_lore', value: '', description: 'Details recently established about the setting.'},
+                ]
             },
         })
     });
