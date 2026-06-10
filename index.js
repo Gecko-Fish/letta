@@ -29,9 +29,10 @@ import { Popup, POPUP_TYPE } from '../../../popup.js';
 import { deleteMediaFromServer } from '../../../chats.js';
 import { MEDIA_REQUEST_TYPE, VIDEO_EXTENSIONS } from '../../../constants.js';
 import { ContextMenu } from '../../quick-reply/src/ui/ctx/ContextMenu.js';
-import { setOpenAIMessages, oai_settings, loadOpenAISettings } from '../../../openai.js';
+import { ChatCompletion, oai_settings, prepareOpenAIMessages } from '../../../openai.js';
 import { user_avatar, autoSelectPersona } from '../../../personas.js';
 import { replaceMacrosInList } from '/scripts/textgen-settings.js';
+import { ChatCompletionService } from '/scripts/custom-request.js';
 
 const { extensionSettings, saveSettingsDebounced, renderExtensionTemplateAsync } = SillyTavern.getContext();
 export { MODULE_NAME };
@@ -129,6 +130,10 @@ export async function init() {
     // eventSource.on(event_types.GENERATION_STOPPED, async function () {
     //     await editLetta(sync_n_messages);
     // });
+
+    eventSource.on(event_types.GENERATION_ENDED, async function () {
+        // await interruptLetta();
+    });
 }
 
 var stash_characterId = "";
@@ -269,9 +274,21 @@ async function getChatLetta(agent_id, title) {
 **/
 async function loadChatLetta(options) {
     const {chatMetadata, chatId, saveMetadata} = SillyTavern.getContext();
+    var n_messages = 1;
 
     if(!chatMetadata.letta_agent_id) await updateCharacterLetta(options?.character || null);
-    
+    if(!chatMetadata.letta_conversation_id){
+        // Behave like an edit and send previous message for the first creation
+        n_messages = letta_glue_settings.sync_n_messages;
+    }
+
+    // chat.slice(-letta_glue_settings.sync_n_messages).map((item)=>{
+    //     return {
+    //         role: item.name,
+    //         content: item.mes,
+    //     }
+    // });
+
     const baseHeaders = getRequestHeaders();
     const response = await fetch('/api/plugins/letta-plugin/load_chat', {
         method: 'POST',
@@ -284,7 +301,7 @@ async function loadChatLetta(options) {
             title: chatId,
             streaming: true,
             stream_tokens: true,
-            n_messages: 1,
+            n_messages: n_messages,
         })
     });
 
